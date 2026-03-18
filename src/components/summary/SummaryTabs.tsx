@@ -1,36 +1,40 @@
 import React from 'react';
-import { FileText, Tag, Layers, BookMarked, HelpCircle } from 'lucide-react';
+import { Layers, CreditCard, HelpCircle, Mic2, Network, Table2, LayoutTemplate } from 'lucide-react';
 
 interface SummaryTabsProps {
   activeTab: string;
-  onTabChange: (tab: any) => void;
+  onTabChange: (tab: string) => void;
 }
 
 const tabs = [
-  { id: 'tldr',      label: 'TL;DR',      icon: <FileText size={13} /> },
-  { id: 'concepts',  label: 'Key Concepts', icon: <Tag size={13} /> },
-  { id: 'detailed',  label: 'Detailed',    icon: <Layers size={13} /> },
-  { id: 'glossary',  label: 'Glossary',    icon: <BookMarked size={13} /> },
-  { id: 'questions', label: 'Study Guide', icon: <HelpCircle size={13} /> },
+  { id: 'detailed',   label: 'Summary',      icon: <Layers size={13} /> },
+  { id: 'flashcards', label: 'Flashcards',   icon: <CreditCard size={13} /> },
+  { id: 'quiz',       label: 'Quiz',         icon: <HelpCircle size={13} /> },
+  { id: 'podcast',    label: 'Podcast',      icon: <Mic2 size={13} /> },
+  { id: 'mindmap',    label: 'Mind Map',     icon: <Network size={13} /> },
+  { id: 'datatable',  label: 'Data',         icon: <Table2 size={13} /> },
+  { id: 'slides',     label: 'Slides',       icon: <LayoutTemplate size={13} /> },
 ];
 
 export const SummaryTabs: React.FC<SummaryTabsProps> = ({ activeTab, onTabChange }) => (
-  <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 4px' }}>
+  <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 20px', gap: '2px', background: 'var(--bg-surface)', overflowX: 'auto', flexShrink: 0 }}>
     {tabs.map(tab => (
       <button
         key={tab.id}
-        onClick={() => onTabChange(tab.id as any)}
+        onClick={() => onTabChange(tab.id)}
         style={{
-          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-          padding: '14px 8px', fontSize: '12px', fontWeight: activeTab === tab.id ? 700 : 500,
-          border: 'none', cursor: 'pointer', background: 'transparent', transition: 'all 0.2s',
-          color: activeTab === tab.id ? 'var(--accent)' : 'var(--text-muted)',
+          display: 'flex', alignItems: 'center', gap: '6px',
+          padding: '13px 14px', fontSize: '12px',
+          fontWeight: activeTab === tab.id ? 700 : 500,
+          border: 'none', cursor: 'pointer', background: 'transparent',
+          transition: 'all 0.2s',
+          color: activeTab === tab.id ? 'var(--accent)' : 'var(--text-secondary)',
           borderBottom: activeTab === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
-          marginBottom: '-1px'
+          marginBottom: '-1px', whiteSpace: 'nowrap', flexShrink: 0,
         }}
       >
         {tab.icon}
-        <span style={{ fontSize: '11px' }}>{tab.label}</span>
+        {tab.label}
       </button>
     ))}
   </div>

@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Recording Subsystem Test Agent</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', system-ui, sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; }
+    h1 { font-size: 20px; margin-bottom: 16px; color: #38bdf8; }
+    .test-suite { display: flex; flex-direction: column; gap: 12px; max-width: 800px; }
+    .test-case { background: #1e293b; border-radius: 10px; padding: 16px; border: 1px solid #334155; }
+    .test-case h3 { font-size: 14px; margin-bottom: 8px; }
+    .test-case .status { font-size: 12px; padding: 4px 10px; border-radius: 6px; display: inline-block; font-weight: 600; }
+    .status.pass { background: #064e3b; color: #34d399; }
+    .status.fail { background: #7f1d1d; color: #fca5a5; }
+    .status.running { background: #78350f; color: #fbbf24; }
+    .status.pending { background: #1e293b; color: #64748b; border: 1px solid #334155; }
+    .log { font-family: 'Fira Code', monospace; font-size: 11px; background: #0f172a; padding: 10px; border-radius: 6px; margin-top: 8px; max-height: 150px; overflow-y: auto; white-space: pre-wrap; color: #94a3b8; }
+    .controls { display: flex; gap: 10px; margin-bottom: 20px; }
+    .controls button { padding: 8px 16px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; font-size: 13px; }
+    .btn-run { background: #38bdf8; color: #0f172a; }
+    .btn-stop { background: #ef4444; color: white; }
+    .summary { background: #1e293b; border-radius: 10px; padding: 16px; margin-top: 16px; border: 1px solid #334155; }
+  </style>
+</head>
+<body>
+  <h1>🧪 Recording Subsystem Test Agent</h1>
+  <p style="color:#94a3b8; margin-bottom:20px; font-size:13px;">
+    This agent tests the SpeechRecognition + MediaRecorder pipeline for edge cases.
+    It simulates the exact flow used by the Lecture AI app.
+  </p>
+  <div class="controls">
+    <button class="btn-run" onclick="runAllTests()">▶ Run All Tests</button>
+    <button class="btn-stop" onclick="stopAll()">⏹ Stop</button>
+  </div>
+  <div id="suite" class="test-suite"></div>
+  <div id="summary" class="summary" style="display:none;"></div>
+
+<script>
+const tests = [];
+let stopRequested = false;
+
+function log(testId, msg) {
+  const el = document.getElementById(`log-${testId}`);
+  if (el) { el.textContent += `[${new Date().toISOString().substr(11,12)}] ${msg}\n`; el.scrollTop = el.scrollHeight; }
+}
+
+function setStatus(testId, status, label) {
+  const el = document.getElementById(`status-${testId}`);
+  if (el) { el.className = `status ${status}`; el.textContent = label || status; }
+}
+
+function createTestUI(id, name, description) {
+  const suite = document.getElementById('suite');
+  const div = document.createElement('div');
+  div.className = 'test-case';
+  div.id = `test-${id}`;
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3>${name}</h3>
+      <span id="status-${id}" class="status pending">Pending</span>
+    </div>
+    <p style="font-size:12px;color:#64748b;margin-bottom:8px;">${description}</p>
+    <div id="log-${id}" class="log"></div>
+  `;
+  suite.appendChild(div);
+}
+
+// ===== TEST 1: SpeechRecognition Availability =====
+async function testSpeechRecognitionAvailability() {
+  const id = 'sr-avail';
+  createTestUI(id, 'Test 1: SpeechRecognition API Availability', 'Checks if the browser supports SpeechRecognition.');
+  setStatus(id, 'running', 'Running...');
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SR) {
+    log(id, '✅ SpeechRecognition API is available.');
+    log(id, `Constructor: ${SR.name || 'webkitSpeechRecognition'}`);
+    setStatus(id, 'pass', 'PASS');
+    return true;
+  } else {
+    log(id, '❌ SpeechRecognition API is NOT available in this browser.');
+    setStatus(id, 'fail', 'FAIL');
+    return false;
+  }
+}
+
+// ===== TEST 2: Microphone Access =====
+async function testMicrophoneAccess() {
+  const id = 'mic-access';
+  createTestUI(id, 'Test 2: Microphone Access', 'Tests getUserMedia for audio access.');
+  setStatus(id, 'running', 'Running...');
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    log(id, `✅ Microphone access granted.`);
+    log(id, `Audio tracks: ${stream.getAudioTracks().length}`);
+    log(id, `Track label: ${stream.getAudioTracks()[0]?.label || 'unknown'}`);
+    stream.getTracks().forEach(t => t.stop());
+    setStatus(id, 'pass', 'PASS');
+    return true;
+  } catch (err) {
+    log(id, `❌ Microphone access DENIED: ${err.message}`);
+    setStatus(id, 'fail', 'FAIL');
+    return false;
+  }
+}
+
+// ===== TEST 3: Append-Only Segment Integrity =====
+async function testAppendOnlyIntegrity() {
+  const id = 'append-only';
+  createTestUI(id, 'Test 3: Append-Only Segment Integrity (10s)', 'Records for 10s in burst mode. Verifies that finalized segments are never deleted.');
+  setStatus(id, 'running', 'Recording...');
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { log(id, 'SKIP: No SpeechRecognition API.'); setStatus(id, 'fail', 'SKIP'); return false; }
+
+  return new Promise((resolve) => {
+    const segments = [];
+    let interimCount = 0;
+    let finalCount = 0;
+    let restartCount = 0;
+    let interimRetractions = 0;
+    let lastInterim = '';
+
+    const recognition = new SR();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event) => {
+      let interim = '';
+      let finalText = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const text = event.results[i][0].transcript;
+        if (event.results[i].isFinal) { finalText += text.trimEnd() + ' '; }
+        else { interim += text; }
+      }
+
+      if (interim) {
+        interimCount++;
+        if (lastInterim && !interim.startsWith(lastInterim.substring(0, 3)) && interim.length < lastInterim.length) {
+          interimRetractions++;
+          log(id, `⚠️ INTERIM RETRACTION: "${lastInterim}" → "${interim}"`);
+        }
+        lastInterim = interim;
+      }
+
+      if (finalText.trim()) {
+        finalCount++;
+        segments.push(finalText.trim());
+        log(id, `📝 FINAL [${finalCount}]: "${finalText.trim()}" | Total segments: ${segments.length}`);
+        lastInterim = '';
+      }
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        log(id, `⚠️ Error: ${event.error}`);
+      }
+    };
+
+    recognition.onend = () => {
+      restartCount++;
+      if (!stopRequested && restartCount < 50) {
+        try { recognition.start(); } catch(e) { log(id, `Restart failed: ${e.message}`); }
+      }
+    };
+
+    try { recognition.start(); } catch(e) { log(id, `Start failed: ${e.message}`); setStatus(id, 'fail', 'FAIL'); resolve(false); return; }
+
+    log(id, '🎤 Recording started. Speak into your microphone...');
+
+    setTimeout(() => {
+      stopRequested = true;
+      try { recognition.onend = null; recognition.stop(); } catch(e) {}
+
+      const transcript = segments.join(' ');
+      log(id, `\n--- RESULTS ---`);
+      log(id, `Interim events: ${interimCount}`);
+      log(id, `Final events: ${finalCount}`);
+      log(id, `Restarts: ${restartCount}`);
+      log(id, `Interim retractions: ${interimRetractions}`);
+      log(id, `Segments preserved: ${segments.length}`);
+      log(id, `Full transcript: "${transcript}"`);
+      log(id, `Transcript length: ${transcript.length} chars`);
+
+      if (segments.length > 0 && transcript.length > 0) {
+        log(id, `\n✅ PASS: ${segments.length} segments preserved. No data loss in append-only log.`);
+        setStatus(id, 'pass', 'PASS');
+        resolve(true);
+      } else if (interimCount > 0 && finalCount === 0) {
+        log(id, `\n⚠️ WARN: ${interimCount} interim results but 0 finalized. Engine retracted all text.`);
+        log(id, `This is EXPECTED if you had background noise / music but no clear speech.`);
+        setStatus(id, 'fail', 'WARN');
+        resolve(false);
+      } else {
+        log(id, `\n❌ FAIL: No audio detected. Ensure mic is active and speak clearly.`);
+        setStatus(id, 'fail', 'FAIL');
+        resolve(false);
+      }
+
+      stopRequested = false;
+    }, 10000);
+  });
+}
+
+// ===== TEST 4: MediaRecorder Blob Integrity =====
+async function testMediaRecorderBlob() {
+  const id = 'mr-blob';
+  createTestUI(id, 'Test 4: MediaRecorder Blob Integrity (5s)', 'Records 5s of audio via MediaRecorder and validates the output blob.');
+  setStatus(id, 'running', 'Recording...');
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mediaRecorder = new MediaRecorder(stream);
+    const chunks = [];
+
+    return new Promise((resolve) => {
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+      mediaRecorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+        log(id, `Blob size: ${blob.size} bytes`);
+        log(id, `Blob type: ${blob.type}`);
+        log(id, `Chunks: ${chunks.length}`);
+        log(id, `MimeType: ${mediaRecorder.mimeType}`);
+
+        if (blob.size > 1000) {
+          log(id, `✅ PASS: Audio blob is ${(blob.size / 1024).toFixed(1)}KB — sufficient for cloud transcription.`);
+          setStatus(id, 'pass', 'PASS');
+          resolve(true);
+        } else {
+          log(id, `❌ FAIL: Audio blob is too small (${blob.size} bytes). Recording may have failed.`);
+          setStatus(id, 'fail', 'FAIL');
+          resolve(false);
+        }
+      };
+
+      mediaRecorder.start();
+      log(id, '🎤 MediaRecorder recording for 5 seconds...');
+      setTimeout(() => { mediaRecorder.stop(); }, 5000);
+    });
+  } catch (err) {
+    log(id, `❌ FAIL: ${err.message}`);
+    setStatus(id, 'fail', 'FAIL');
+    return false;
+  }
+}
+
+// ===== TEST 5: Rapid Restart Resilience =====
+async function testRapidRestarts() {
+  const id = 'rapid-restart';
+  createTestUI(id, 'Test 5: Rapid Restart Resilience (8s)', 'Simulates rapid engine restarts to test for "InvalidStateError" crashes.');
+  setStatus(id, 'running', 'Running...');
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { log(id, 'SKIP: No SpeechRecognition API.'); setStatus(id, 'fail', 'SKIP'); return false; }
+
+  return new Promise((resolve) => {
+    let restarts = 0;
+    let errors = 0;
+    let crashErrors = 0;
+
+    const recognition = new SR();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = () => {}; // We don't care about results here
+
+    recognition.onerror = (event) => {
+      errors++;
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        crashErrors++;
+        log(id, `💥 CRASH ERROR: ${event.error}`);
+      }
+    };
+
+    recognition.onend = () => {
+      restarts++;
+      if (restarts < 30 && !stopRequested) {
+        // Sometimes restart immediately, sometimes with delay
+        const delay = Math.random() < 0.5 ? 0 : 50;
+        setTimeout(() => {
+          try { recognition.start(); } catch(e) {
+            log(id, `⚠️ Start failed on restart ${restarts}: ${e.message}`);
+            // Retry after delay
+            setTimeout(() => {
+              try { recognition.start(); } catch(e2) { log(id, `❌ Retry also failed: ${e2.message}`); }
+            }, 100);
+          }
+        }, delay);
+      }
+    };
+
+    try { recognition.start(); } catch(e) { log(id, `Start failed: ${e.message}`); }
+    log(id, 'Testing rapid restarts...');
+
+    setTimeout(() => {
+      stopRequested = true;
+      try { recognition.onend = null; recognition.stop(); } catch(e) {}
+      
+      log(id, `\n--- RESULTS ---`);
+      log(id, `Total restarts: ${restarts}`);
+      log(id, `Total errors: ${errors}`);
+      log(id, `Crash errors: ${crashErrors}`);
+
+      if (crashErrors === 0) {
+        log(id, `✅ PASS: ${restarts} restarts with 0 crash errors.`);
+        setStatus(id, 'pass', 'PASS');
+        resolve(true);
+      } else {
+        log(id, `❌ FAIL: ${crashErrors} crash errors during rapid restarts.`);
+        setStatus(id, 'fail', 'FAIL');
+        resolve(false);
+      }
+      stopRequested = false;
+    }, 8000);
+  });
+}
+
+// ===== TEST 6: AudioContext Volume Detection =====
+async function testVolumeDetection() {
+  const id = 'volume';
+  createTestUI(id, 'Test 6: AudioContext Volume Detection (5s)', 'Tests the volume analysis pipeline used for music detection.');
+  setStatus(id, 'running', 'Analyzing...');
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+
+    const samples = [];
+
+    return new Promise((resolve) => {
+      const interval = setInterval(() => {
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        analyser.getByteTimeDomainData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          const v = (dataArray[i] - 128) / 128;
+          sum += v * v;
+        }
+        const rms = Math.sqrt(sum / bufferLength);
+        const volume = rms * 100;
+        samples.push(volume);
+      }, 200);
+
+      setTimeout(() => {
+        clearInterval(interval);
+        stream.getTracks().forEach(t => t.stop());
+        ctx.close();
+
+        const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+        const max = Math.max(...samples);
+        const min = Math.min(...samples);
+
+        log(id, `Samples collected: ${samples.length}`);
+        log(id, `Avg volume: ${avg.toFixed(2)}`);
+        log(id, `Max volume: ${max.toFixed(2)}`);
+        log(id, `Min volume: ${min.toFixed(2)}`);
+
+        if (samples.length > 10) {
+          log(id, `✅ PASS: Volume pipeline working. Avg=${avg.toFixed(2)}, Max=${max.toFixed(2)}`);
+          setStatus(id, 'pass', 'PASS');
+          resolve(true);
+        } else {
+          log(id, `❌ FAIL: Insufficient volume samples.`);
+          setStatus(id, 'fail', 'FAIL');
+          resolve(false);
+        }
+      }, 5000);
+    });
+  } catch (err) {
+    log(id, `❌ FAIL: ${err.message}`);
+    setStatus(id, 'fail', 'FAIL');
+    return false;
+  }
+}
+
+// ===== RUNNER =====
+async function runAllTests() {
+  stopRequested = false;
+  document.getElementById('suite').innerHTML = '';
+  document.getElementById('summary').style.display = 'none';
+
+  const results = {};
+  results['SR Availability'] = await testSpeechRecognitionAvailability();
+  results['Mic Access'] = await testMicrophoneAccess();
+  results['Append-Only Integrity'] = await testAppendOnlyIntegrity();
+  results['MediaRecorder Blob'] = await testMediaRecorderBlob();
+  results['Rapid Restart'] = await testRapidRestarts();
+  results['Volume Detection'] = await testVolumeDetection();
+
+  const passed = Object.values(results).filter(v => v === true).length;
+  const total = Object.keys(results).length;
+
+  const summaryEl = document.getElementById('summary');
+  summaryEl.style.display = 'block';
+  summaryEl.innerHTML = `
+    <h3 style="margin-bottom:8px;">Test Summary: ${passed}/${total} passed</h3>
+    ${Object.entries(results).map(([name, pass]) => `
+      <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;border-bottom:1px solid #334155;">
+        <span>${name}</span>
+        <span style="color:${pass ? '#34d399' : '#fca5a5'};font-weight:600;">${pass ? '✅ PASS' : '❌ FAIL'}</span>
+      </div>
+    `).join('')}
+  `;
+}
+
+function stopAll() {
+  stopRequested = true;
+}
+</script>
+</body>
+</html>

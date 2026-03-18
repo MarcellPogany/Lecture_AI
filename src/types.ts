@@ -6,6 +6,16 @@ export interface Attachment {
   mimeType: string;
 }
 
+export interface SessionSource {
+  id: string;
+  type: 'transcript' | 'url' | 'youtube' | 'paste' | 'file';
+  name: string;
+  url?: string;
+  text?: string;           // extracted/full text for RAG
+  dateAdded: string;
+  cannotParse?: boolean;
+}
+
 export interface Session {
   id: string;        // local UUID (may equal dbId after sync)
   dbId?: string;     // Supabase sessions.id once persisted
@@ -21,15 +31,89 @@ export interface Session {
   inputType: 'upload' | 'record' | 'paste' | 'url';
   status: 'pending' | 'transcribed' | 'summarized' | 'error';
   attachments?: Attachment[];
+  sources?: SessionSource[];
+  chatHistory?: ChatMessage[];
+  podcastScript?: PodcastTurn[];
+  mindMap?: MindMapNode;
+  dataTable?: { headers: string[]; rows: string[][] };
+  slides?: Slide[];
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  timestamp: string;
+}
+
+export interface PodcastTurn {
+  host: 'A' | 'B';
+  text: string;
+}
+
+export interface MindMapNode {
+  label: string;
+  children?: MindMapNode[];
+}
+
+export interface Slide {
+  title: string;
+  bullets: string[];
+  speakerNote?: string;
+}
+
+export interface Course {
+  id: string;
+  userId: string;
+  name: string;
+  semester?: string;
+  professor?: string;
+  createdAt: string;
+}
+
+export interface SourceInfo {
+  type: 'transcript' | 'document' | 'error';
+  name: string;
+  meta?: string; // e.g. "42 mins" or "18 pages"
+  date?: string;
+  cannotParse?: boolean;
+}
+
+export interface DetailedBlock {
+  heading: string;
+  sources: string;
+  body: string;
+}
+
+export interface Flashcard {
+  front: string;
+  back: string;
+}
+
+export interface QuizQuestion {
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+  difficulty: 'recall' | 'comprehension' | 'application';
 }
 
 export interface Summary {
+  // Legacy fields kept for backwards compat
   tldr: string;
   keyConcepts: string[];
   detailedSummary: { topic: string; content: string }[];
   glossary: { term: string; definition: string }[];
   studyQuestions: string[];
   actionItems?: { speaker: string; task: string }[];
+
+  // New rich fields
+  sources?: SourceInfo[];
+  introductionParagraph?: string;
+  topicBlocks?: DetailedBlock[];
+  synthesisParagraph?: string;
+  flashcards?: Flashcard[];
+  quiz?: QuizQuestion[];
 }
 
 // ── Auth types ────────────────────────────────────────────

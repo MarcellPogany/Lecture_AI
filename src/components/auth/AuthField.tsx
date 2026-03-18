@@ -18,7 +18,8 @@ export const AuthField: React.FC<AuthFieldProps> = ({ label, icon, value, onChan
         value={value}
         onChange={e => onChange(e.target.value)}
         required
-        style={{ width: '100%', padding: '12px 14px 12px 42px', background: 'var(--bg-muted)', border: '1px solid var(--border)', borderRadius: '12px', color: 'var(--text-primary)', fontSize: '14px', fontWeight: 500, outline: 'none', boxSizing: 'border-box', transition: 'all 0.2s ease' }}
+        className="auth-input"
+        style={{ width: '100%', padding: '14px 16px 14px 44px', background: 'var(--bg-surface)', border: '1.5px solid var(--border-strong)', borderRadius: '12px', color: 'var(--text-primary)', fontSize: '15px', fontWeight: 500, outline: 'none', boxSizing: 'border-box', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', boxShadow: 'var(--shadow-sm)' }}
       />
     </div>
   </div>

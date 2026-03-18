@@ -3,9 +3,9 @@ import { Session, Summary } from '../types';
 import { SessionHeader } from './SessionHeader';
 import { TranscriptView } from './TranscriptView';
 import { SummaryView } from './SummaryView';
-import { RecordingOverlay } from './RecordingOverlay';
+import { ChatPanel } from './ChatPanel';
 import { EmptyState } from './EmptyState';
-import { FileText, Sparkles, AlertCircle } from 'lucide-react';
+import { FileText, Sparkles, AlertCircle, MessageSquare } from 'lucide-react';
 
 interface MainContentProps {
   activeSession: Session | null;
@@ -13,10 +13,18 @@ interface MainContentProps {
   isUploading: boolean;
   isSummarizing: boolean;
   interimText: string;
+  processingText: string;
   recordingTime: number;
+  recordingSource: 'mic' | 'tab' | null;
   formatTime: (s: number) => string;
+  onPause: () => void;
+  onResume: () => void;
+  onStop: () => void;
   stopRecording: () => void;
   startRecording: () => void;
+  isPaused: boolean;
+  pauseRecording: () => void;
+  resumeRecording: () => void;
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleSummarize: () => void;
   updateSession: (id: string, updates: any) => void;
@@ -35,6 +43,21 @@ interface MainContentProps {
   audioRef: React.RefObject<HTMLAudioElement>;
   handleAddAttachment: (e: React.ChangeEvent<HTMLInputElement>) => Promise<boolean>;
   handleRemoveAttachment: (id: string) => void;
+  onResumeRecording: () => void;
+  isChatLoading?: boolean;
+  isGeneratingPodcast?: boolean;
+  isGeneratingMindMap?: boolean;
+  isGeneratingDataTable?: boolean;
+  isGeneratingSlides?: boolean;
+  onAsk?: (q: string) => void;
+  onGeneratePodcast?: () => void;
+  onGenerateMindMap?: () => void;
+  onGenerateDataTable?: () => void;
+  onGenerateSlides?: () => void;
+  isAddingSource?: boolean;
+  handleAddSourceUrl?: (url: string) => void;
+  handleAddSourceYouTube?: (url: string) => void;
+  onAppendAudio?: (file: File) => void;
 }
 
 export function MainContent({
@@ -43,10 +66,18 @@ export function MainContent({
   isUploading,
   isSummarizing,
   interimText,
+  processingText,
   recordingTime,
+  recordingSource,
   formatTime,
+  onPause,
+  onResume,
+  onStop,
   stopRecording,
   startRecording,
+  isPaused,
+  pauseRecording,
+  resumeRecording,
   handleFileUpload,
   handleSummarize,
   updateSession,
@@ -64,9 +95,17 @@ export function MainContent({
   handleGenerateTTS,
   audioRef,
   handleAddAttachment,
-  handleRemoveAttachment
+  handleRemoveAttachment,
+  onResumeRecording,
+  isChatLoading,
+  isGeneratingPodcast, isGeneratingMindMap, isGeneratingDataTable, isGeneratingSlides,
+  onAsk, onGeneratePodcast, onGenerateMindMap, onGenerateDataTable, onGenerateSlides,
+  isAddingSource,
+  handleAddSourceUrl,
+  handleAddSourceYouTube,
+  onAppendAudio,
 }: MainContentProps) {
-  const [mainTab, setMainTab] = useState<'transcript' | 'summary'>('transcript');
+  const [mainTab, setMainTab] = useState<'transcript' | 'summary' | 'chat'>('transcript');
   const [showRegeneratePrompt, setShowRegeneratePrompt] = useState(false);
 
   if (!activeSession) {
@@ -90,15 +129,6 @@ export function MainContent({
 
   return (
     <>
-      {showRecordingOverlay && (
-        <RecordingOverlay 
-          activeSession={activeSession} 
-          interimText={interimText} 
-          recordingTime={recordingTime} 
-          formatTime={formatTime} 
-          onStop={stopRecording} 
-        />
-      )}
       <SessionHeader
         session={activeSession}
         audioRef={audioRef}
@@ -134,6 +164,20 @@ export function MainContent({
         >
           <Sparkles size={16} />
           AI Summary
+        </button>
+        <button
+          onClick={() => setMainTab('chat')}
+          style={{
+            background: 'none', border: 'none', padding: '12px 0', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: '8px',
+            borderBottom: mainTab === 'chat' ? '2px solid var(--accent)' : '2px solid transparent',
+            color: mainTab === 'chat' ? 'var(--text-primary)' : 'var(--text-secondary)',
+            fontWeight: mainTab === 'chat' ? 600 : 500,
+            fontSize: '14px', transition: 'all 0.2s'
+          }}
+        >
+          <MessageSquare size={16} />
+          Chat
         </button>
       </div>
 
@@ -171,7 +215,13 @@ export function MainContent({
             isRecording={isRecording}
             recordingSessionId={isRecording ? activeSession.id : null}
             interimText={interimText}
+            processingText={processingText}
+            recordingTime={recordingTime}
+            recordingSource={recordingSource}
+            formatTime={formatTime}
+            isPaused={isPaused}
             selectedText={selectedText}
+            isAddingSource={isAddingSource}
             isSelectedGeneratingTTS={isSelectedGeneratingTTS}
             selectedTtsAudioUrl={selectedTtsAudioUrl}
             transcriptRef={transcriptRef}
@@ -182,10 +232,16 @@ export function MainContent({
             onTranscriptSelect={handleTranscriptSelect}
             onTranscriptChange={transcript => updateSession(activeSession.id, { transcript })}
             onGenerateSelectionTTS={handleGenerateSelectionTTS}
+            onResumeRecording={onResumeRecording}
+            onPauseRecording={onPause}
+            onStopRecording={onStop}
             onAddAttachment={onAddAttachment}
             onRemoveAttachment={handleRemoveAttachment}
+            onAddSourceUrl={handleAddSourceUrl}
+            onAddSourceYouTube={handleAddSourceYouTube}
+            onAppendAudio={onAppendAudio}
           />
-        ) : (
+        ) : mainTab === 'summary' ? (
           <SummaryView
             activeSession={activeSession}
             activeTab={activeTab}
@@ -195,6 +251,20 @@ export function MainContent({
             ttsAudioRef={ttsAudioRef}
             onTabChange={setActiveTab}
             onGenerateTTS={handleGenerateTTS}
+            isGeneratingPodcast={isGeneratingPodcast}
+            isGeneratingMindMap={isGeneratingMindMap}
+            isGeneratingDataTable={isGeneratingDataTable}
+            isGeneratingSlides={isGeneratingSlides}
+            onGeneratePodcast={onGeneratePodcast}
+            onGenerateMindMap={onGenerateMindMap}
+            onGenerateDataTable={onGenerateDataTable}
+            onGenerateSlides={onGenerateSlides}
+          />
+        ) : (
+          <ChatPanel
+            chatHistory={activeSession.chatHistory || []}
+            isLoading={isChatLoading}
+            onAsk={onAsk || (() => {})}
           />
         )}
       </div>

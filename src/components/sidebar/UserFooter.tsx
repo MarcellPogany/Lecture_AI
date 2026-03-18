@@ -7,20 +7,30 @@ export const UserFooter: React.FC = () => {
   const initial = (profile?.display_name || user?.email || 'U')[0].toUpperCase();
 
   return (
-    <div style={{ padding: '12px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-      <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '13px', color: 'white', flexShrink: 0 }}>
-        {initial}
-      </div>
+    <div style={{ padding: '20px 24px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div style={{ flex: 1, overflow: 'hidden' }}>
-        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {profile?.display_name || 'User'}
+        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {profile?.display_name || 'Marcell Pogany'}
         </div>
-        <div style={{ fontSize: '10px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {user?.email}
+        <div style={{ fontSize: '13px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {user?.email || 'marcell.pogany@stu...'}
         </div>
       </div>
-      <button onClick={signOut} title="Sign out" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', borderRadius: '6px', flexShrink: 0 }}>
-        <LogOut size={15} />
+      <button 
+        onClick={signOut} 
+        style={{ 
+          display: 'flex', alignItems: 'center', gap: '8px', 
+          background: 'transparent', border: '1px solid var(--border)', 
+          color: 'var(--text-secondary)', fontWeight: 600, fontSize: '13px', 
+          padding: '8px 12px', borderRadius: '8px', cursor: 'pointer',
+          transition: 'all 0.2s ease', 
+          width: '100%' 
+        }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--text-muted)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+      >
+        <LogOut size={16} />
+        Log Out
       </button>
     </div>
   );

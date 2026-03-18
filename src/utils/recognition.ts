@@ -23,7 +23,10 @@ export interface RecognitionHandlers {
 }
 
 export const setupRecognition = (recognition: any, handlers: RecognitionHandlers) => {
-  recognition.continuous = true;
+  // Use discrete short-burst mode to prevent engine from silently dropping interim results
+  // during long pauses or noisy environments. The engine will automatically finalize 
+  // sentences and trigger onEnd, allowing us to cleanly save and restart.
+  recognition.continuous = false;
   recognition.interimResults = true;
   recognition.maxAlternatives = 1;
   recognition.lang = 'en-US';

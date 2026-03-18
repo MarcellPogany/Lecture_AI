@@ -25,37 +25,51 @@ export const useSessionMutations = (
         setActiveSessionId(partial.dbId);
         return;
       }
+      // Optimistic update: Add local session immediately so transcript updates have a target
+      setSessions(prev => [{ ...partial, status: 'pending' } as Session, ...prev]);
+      setActiveSessionId(partial.id);
+
       const db = await createDbSession(userId, partial.title, partial.courseTag, partial.inputType);
-      const full: Session = { ...partial, dbId: db.id, id: db.id, status: 'pending' };
-      setSessions(prev => [full, ...prev]);
-      setActiveSessionId(db.id);
+      
+      // Update the optimistic session with the real dbId, but KEEP the local id!
+      setSessions(prev => prev.map(s => s.id === partial.id ? { ...s, dbId: db.id } : s));
     } catch (e) { console.error(e); }
   }, [userId, setSessions, setActiveSessionId]);
 
   const updateSession = useCallback((id: string, updates: Partial<Session>) => {
-    setSessions(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
-    const session = sessions.find(s => s.id === id);
-    if (!session?.dbId || !userId) return;
+    setSessions(prev => {
+      const updatedSessions = prev.map(s => s.id === id ? { ...s, ...updates } : s);
+      const session = updatedSessions.find(s => s.id === id);
+      
+      if (session?.dbId && userId) {
+        const dbFields: any = {};
+        if (updates.title) dbFields.title = updates.title;
+        if (updates.courseTag !== undefined) dbFields.course_tag = updates.courseTag;
+        if (updates.status) dbFields.status = updates.status;
+        
+        if (Object.keys(dbFields).length) {
+          updateDbSession(session.dbId, dbFields).catch(console.error);
+        }
 
-    const dbFields: any = {};
-    if (updates.title) dbFields.title = updates.title;
-    if (updates.courseTag) dbFields.course_tag = updates.courseTag;
-    if (updates.status) dbFields.status = updates.status;
-    if (Object.keys(dbFields).length) updateDbSession(session.dbId, dbFields).catch(console.error);
+        if (updates.transcript !== undefined) {
+          if (transcriptSaveTimer.current) clearTimeout(transcriptSaveTimer.current);
+          transcriptSaveTimer.current = setTimeout(async () => {
+            // Need to get the latest transcriptDbId from the state at time of save
+            // But for now we just use what we have in the local 'session' object
+            const txId = await saveTranscript(session.dbId!, userId, updates.transcript!, session.transcriptDbId);
+            setSessions(p => p.map(s => s.id === id ? { ...s, transcriptDbId: txId } : s));
+          }, DEBOUNCE_MS);
+        }
 
-    if (updates.transcript !== undefined) {
-      if (transcriptSaveTimer.current) clearTimeout(transcriptSaveTimer.current);
-      transcriptSaveTimer.current = setTimeout(async () => {
-        const txId = await saveTranscript(session.dbId!, userId, updates.transcript!, session.transcriptDbId);
-        setSessions(prev => prev.map(s => s.id === id ? { ...s, transcriptDbId: txId } : s));
-      }, DEBOUNCE_MS);
-    }
+        if (updates.summary) {
+          saveSummary(session.dbId, userId, updates.summary, session.summaryDbId)
+            .then(sid => setSessions(p => p.map(s => s.id === id ? { ...s, summaryDbId: sid } : s)));
+        }
+      }
 
-    if (updates.summary) {
-      saveSummary(session.dbId, userId, updates.summary, session.summaryDbId)
-        .then(sid => setSessions(prev => prev.map(s => s.id === id ? { ...s, summaryDbId: sid } : s)));
-    }
-  }, [userId, sessions, setSessions]);
+      return updatedSessions;
+    });
+  }, [userId, setSessions]);
 
   const deleteSession = useCallback(async (id: string) => {
     const session = sessions.find(s => s.id === id);

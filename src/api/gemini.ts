@@ -2,7 +2,7 @@ import { GoogleGenAI, Type, Modality } from '@google/genai';
 import { Summary, Attachment } from '../types';
 import { getSummarizationPrompt } from '../prompts';
 
-export const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+export const ai = new GoogleGenAI({ apiKey: import.meta.env.GEMINI_API_KEY || import.meta.env.VITE_OPENROUTER_API_KEY });
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -58,7 +58,7 @@ export const transcribeAudio = async (file: File): Promise<string> => {
 
 export const summarizeTranscript = async (transcript: string, attachments: Attachment[] = []): Promise<Summary> => {
   const parts: any[] = [
-    { text: getSummarizationPrompt(transcript) }
+    { text: getSummarizationPrompt(transcript, attachments.map(a => a.name)) }
   ];
 
   for (const attachment of attachments) {
